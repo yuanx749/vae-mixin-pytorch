@@ -12,6 +12,7 @@ class VAEMixin:
     """Mixin class for basic VAE.
 
     https://arxiv.org/abs/1312.6114
+
     https://arxiv.org/abs/2006.10273
 
     """
@@ -32,7 +33,7 @@ class VAEMixin:
 
         Returns
         -------
-        torch.Tensor
+        z : torch.Tensor
             The latent variables if training else mean.
 
         """
@@ -52,7 +53,7 @@ class VAEMixin:
 
         Returns
         -------
-        torch.Tensor
+        x_rec : torch.Tensor
             The reconstructed data.
 
         """
@@ -70,7 +71,8 @@ class VAEMixin:
 
         Returns
         -------
-        torch.Tensor
+        bce : torch.Tensor
+            The binary cross entropy.
 
         """
         bce = F.binary_cross_entropy(x_rec, x, reduction="none").sum(dim=1).mean()
@@ -93,7 +95,8 @@ class VAEMixin:
 
         Returns
         -------
-        torch.Tensor
+        kld : torch.Tensor
+            The KL divergence.
 
         """
         mu = self.mu_ if mu is None else mu
@@ -118,7 +121,7 @@ class VAEMixin:
 
 
 class BetaVAEMixin:
-    """Mixin class for :math:`\beta`-VAE.
+    """Mixin class for :math:`\\beta`-VAE.
 
     https://openreview.net/forum?id=Sy2fzU9gl
 
@@ -133,12 +136,12 @@ class BetaVAEMixin:
         super().__init__(**kwargs)
 
     def loss(self, beta: Optional[float] = None, **kwargs) -> Tensor:
-        """Compute the :math:`\beta`-VAE objective function.
+        """Compute the :math:`\\beta`-VAE objective function.
 
         Parameters
         ----------
         beta : float, optional
-            Coefficient :math:`\beta`.
+            Coefficient :math:`\\beta`.
         **kwargs
             Extra arguments to loss terms.
 
@@ -188,7 +191,8 @@ class InfoVAEMixin:
 
         Returns
         -------
-        torch.Tensor
+        mmd : torch.Tensor
+            The squared maximum mean discrepancy.
 
         """
         z_p = torch.randn_like(z)
@@ -212,7 +216,7 @@ class InfoVAEMixin:
         lamb : float, optional
             Scaling coefficient :math:`\lambda`.
         alpha : float, optional
-            Information preference :math:`\alpha`.
+            Information preference :math:`\\alpha`.
         **kwargs
             Extra arguments to loss terms.
 
@@ -242,7 +246,6 @@ class VQVAEMixin:
     num_embeddings : int
         The size of the discrete latent space.
     commitment_cost : float
-        Scalar which controls the weighting of the commitment loss.
 
     """
 
@@ -269,7 +272,7 @@ class VQVAEMixin:
 
         Returns
         -------
-        torch.Tensor
+        z_e : torch.Tensor
             The encoder outputs.
 
         """
@@ -286,10 +289,11 @@ class VQVAEMixin:
 
         Returns
         -------
-        quantized : torch.Tensor
+        z_q : torch.Tensor
             The quantized vectors of the inputs.
-        encoding_indices : torch.Tensor
+        z : torch.Tensor
             The discrete latent variables.
+
         """
         assert inputs.size(-1) == self.embedding_dim
         flat_inputs = inputs.reshape(-1, self.embedding_dim)

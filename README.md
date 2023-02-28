@@ -6,7 +6,13 @@ This repo contains implementation of variational autoencoder (VAE) and variants 
 
 ## Usage
 
+Check the docs [here](https://yuanx749.github.io/vae-mixin-pytorch/).
+
 An example using simple encoder and decoder on the MNIST dataset is in `example.py`.
+
+```{note}
+Mixin is a term in object-oriented programming.
+```
 
 ## Notes
 
@@ -16,4 +22,6 @@ Implemented VAEs:
 - InfoVAE
 - VQ-VAE
 
+```{note}
 Losses are averaged across samples, and summed along each latent vector in a minibatch.
+```
