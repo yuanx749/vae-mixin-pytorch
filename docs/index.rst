@@ -2,7 +2,7 @@
    :parser: myst_parser.sphinx_
 
 .. toctree::
-    :hidden:
+   :hidden:
 
-    api
-
+   api
+   View on GitHub <https://github.com/yuanx749/vae-mixin-pytorch>
