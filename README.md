@@ -8,7 +8,7 @@ This repo contains implementation of variational autoencoder (VAE) and variants 
 
 Check the docs [here](https://yuanx749.github.io/vae-mixin-pytorch/).
 
-An example using simple encoder and decoder on the MNIST dataset is in `example.py`.
+An example using simple encoder and decoder on the MNIST dataset is in [example.py](https://github.com/yuanx749/vae-mixin-pytorch/blob/main/example.py).
 
 ```{note}
 Mixin is a term in object-oriented programming.
