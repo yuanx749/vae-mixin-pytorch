@@ -9,31 +9,26 @@ author = "yuanx749"
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "myst_parser",
 ]
-
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
-
 toc_object_entries_show_parents = "hide"
 
-html_theme = "sphinx_rtd_theme"
+html_theme = "furo"
 html_static_path = ["_static"]
-html_theme_options = {
-    "collapse_navigation": False,
-}
-html_context = {
-    "display_github": True,
-    "github_user": author,
-    "github_repo": "-".join(project.split()).lower(),
-    "github_version": "main",
-    "conf_py_path": "/docs/",
-}
 
 autodoc_member_order = "bysource"
 autodoc_mock_imports = ["torch"]
+autodoc_typehints = "none"
+
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "torch": ("https://pytorch.org/docs/stable", None),
+}
 
 napoleon_google_docstring = False
 napoleon_use_param = False

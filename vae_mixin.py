@@ -119,7 +119,7 @@ class VAEMixin:
 
 
 class BetaVAEMixin:
-    """Mixin class for :math:`\\beta`-VAE.
+    r"""Mixin class for :math:`\beta`-VAE.
 
     https://openreview.net/forum?id=Sy2fzU9gl
 
@@ -134,12 +134,12 @@ class BetaVAEMixin:
         super().__init__(**kwargs)
 
     def loss(self, beta: Optional[float] = None, **kwargs) -> Tensor:
-        """Compute the :math:`\\beta`-VAE objective function.
+        r"""Compute the :math:`\beta`-VAE objective function.
 
         Parameters
         ----------
         beta : float, optional
-            Coefficient :math:`\\beta`.
+            Coefficient :math:`\beta`.
         **kwargs
             Extra arguments to loss terms.
 
@@ -207,14 +207,14 @@ class InfoVAEMixin:
         alpha: Optional[float] = None,
         **kwargs,
     ) -> Tensor:
-        """Compute the InfoVAE objective function.
+        r"""Compute the InfoVAE objective function.
 
         Parameters
         ----------
         lamb : float, optional
             Scaling coefficient :math:`\lambda`.
         alpha : float, optional
-            Information preference :math:`\\alpha`.
+            Information preference :math:`\alpha`.
         **kwargs
             Extra arguments to loss terms.
 
