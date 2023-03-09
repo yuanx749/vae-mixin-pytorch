@@ -10,9 +10,9 @@ author = "yuanx749"
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
-    "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
     "myst_parser",
+    "numpydoc",
 ]
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
@@ -30,7 +30,6 @@ intersphinx_mapping = {
     "torch": ("https://pytorch.org/docs/stable", None),
 }
 
-napoleon_google_docstring = False
-napoleon_use_param = False
-napoleon_use_rtype = False
-napoleon_preprocess_types = True
+numpydoc_show_class_members = False
+numpydoc_xref_param_type = True
+numpydoc_xref_ignore = {"optional", "default"}
