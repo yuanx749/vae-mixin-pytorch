@@ -19,6 +19,7 @@ exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 toc_object_entries_show_parents = "hide"
 
 html_theme = "furo"
+html_css_files = ["custom.css"]
 html_static_path = ["_static"]
 
 autodoc_member_order = "bysource"

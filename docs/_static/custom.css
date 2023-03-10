@@ -1,0 +1,14 @@
+/* colon */
+dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple) dl.field-list .classifier::before {
+    font-style: normal;
+}
+
+/* parameter type */
+dl[class]:not(.option-list):not(.field-list):not(.footnote):not(.glossary):not(.simple) dl.field-list .classifier {
+    font-style: oblique;
+}
+
+/* other sections */
+dd p.rubric {
+    font-weight: 500;
+}
