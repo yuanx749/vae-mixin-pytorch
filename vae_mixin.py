@@ -99,7 +99,8 @@ class VAEMixin:
         """
         mu = self.mu_ if mu is None else mu
         logvar = self.logvar_ if logvar is None else logvar
-        kld = -0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1).mean()
+        var = torch.exp(logvar)
+        kld = -0.5 * (1 + logvar - mu**2 - var).sum(dim=1).mean()
         return kld
 
     def loss(self, **kwargs) -> Tensor:
@@ -177,7 +178,7 @@ class InfoVAEMixin:
         dim = x1.size(1)
         x1 = x1.view(n1, 1, dim)
         x2 = x2.view(1, n2, dim)
-        return torch.exp(-1.0 / dim * torch.sum((x1 - x2) ** 2, dim=2))
+        return torch.exp(-1.0 / dim * (x1 - x2).pow(2).sum(dim=2))
 
     def mmd_loss(self, z: Tensor, **kwargs) -> Tensor:
         """Compute the MMD loss of :math:`q(z)` and :math:`p(z)`.
@@ -296,11 +297,11 @@ class VQVAEMixin:
         assert inputs.size(-1) == self.embedding_dim
         flat_inputs = inputs.reshape(-1, self.embedding_dim)
         distances = (
-            torch.sum(flat_inputs**2, dim=1, keepdim=True)
-            - 2 * torch.matmul(flat_inputs, self.embeddings.weight.t())
-            + torch.sum(self.embeddings.weight**2, dim=1)
+            (flat_inputs**2).sum(dim=1, keepdim=True)
+            - 2 * flat_inputs @ self.embeddings.weight.t()
+            + (self.embeddings.weight**2).sum(dim=1)
         )
-        encoding_indices = torch.argmin(distances, dim=1)
+        encoding_indices = distances.argmin(dim=1)
         encoding_indices = encoding_indices.reshape(inputs.shape[:-1])
         quantized = self.embeddings.forward(encoding_indices)
         self.codebook_loss_, self.commitment_loss_ = self.vq_loss(inputs, quantized)
@@ -324,8 +325,8 @@ class VQVAEMixin:
         commitment_loss : torch.Tensor
 
         """
-        codebook_loss = torch.sum((z_e.detach() - z_q) ** 2, dim=-1).mean()
-        commitment_loss = torch.sum((z_e - z_q.detach()) ** 2, dim=-1).mean()
+        codebook_loss = (z_e.detach() - z_q).pow(2).sum(dim=-1).mean()
+        commitment_loss = (z_e - z_q.detach()).pow(2).sum(dim=-1).mean()
         return codebook_loss, commitment_loss
 
     def loss(self, beta: Optional[float] = None, **kwargs) -> Tensor:
