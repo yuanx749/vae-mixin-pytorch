@@ -1,5 +1,6 @@
 """Mixin classes for VAE varients."""
 
+import math
 from typing import Optional, Tuple
 
 import torch
@@ -19,7 +20,8 @@ class VAEMixin:
     def reparameterize(mu: Tensor, logvar: Tensor) -> Tensor:
         """Reparameterization trick."""
         std = torch.exp(0.5 * logvar)
-        return mu + torch.randn_like(std) * std
+        eps = torch.randn_like(std)
+        return mu + std * eps
 
     def encode(self, x: Tensor) -> Tensor:
         """
@@ -35,11 +37,12 @@ class VAEMixin:
             The latent variables if training else mean.
 
         """
-        self.mu_, self.logvar_ = self.encoder(x)
+        mu, logvar = self.encoder(x)
+        self.mu_, self.logvar_ = mu, logvar
         if self.training:
-            z = self.reparameterize(self.mu_, self.logvar_)
+            z = self.reparameterize(mu, logvar)
             return z
-        return self.mu_
+        return mu
 
     def decode(self, z: Tensor) -> Tensor:
         """
@@ -74,6 +77,7 @@ class VAEMixin:
 
         """
         bce = F.binary_cross_entropy(x_rec, x, reduction="none").sum(dim=1).mean()
+        self.loss_rec_ = bce
         return bce
 
     def kl_loss(
@@ -82,7 +86,8 @@ class VAEMixin:
         logvar: Optional[Tensor] = None,
         **kwargs,
     ) -> Tensor:
-        """Compute the KL divergence loss, when the prior :math:`p(z)=\mathcal{N}(0,\mathbf{I})` and the posterior approximation :math:`q(z|x)` are Gaussian.
+        """Compute the KL divergence loss, when the prior :math:`p(z)=\mathcal{N}(0,\mathbf{I})`
+        and the posterior approximation :math:`q(z|x)` are Gaussian.
 
         Parameters
         ----------
@@ -101,6 +106,7 @@ class VAEMixin:
         logvar = self.logvar_ if logvar is None else logvar
         var = torch.exp(logvar)
         kld = -0.5 * (1 + logvar - mu**2 - var).sum(dim=1).mean()
+        self.loss_kl_ = kld
         return kld
 
     def loss(self, **kwargs) -> Tensor:
@@ -127,6 +133,7 @@ class BetaVAEMixin:
     Parameters
     ----------
     beta : float, default 1
+        Regularisation coefficient :math:`\beta`.
 
     """
 
@@ -134,13 +141,11 @@ class BetaVAEMixin:
         self.beta = beta
         super().__init__(**kwargs)
 
-    def loss(self, beta: Optional[float] = None, **kwargs) -> Tensor:
+    def loss(self, **kwargs) -> Tensor:
         r"""Compute the :math:`\beta`-VAE objective function.
 
         Parameters
         ----------
-        beta : float, optional
-            Coefficient :math:`\beta`.
         **kwargs
             Extra arguments to loss terms.
 
@@ -149,19 +154,20 @@ class BetaVAEMixin:
         torch.Tensor
 
         """
-        beta = self.beta if beta is None else beta
-        return self.rec_loss(**kwargs) + beta * self.kl_loss(**kwargs)
+        return self.rec_loss(**kwargs) + self.beta * self.kl_loss(**kwargs)
 
 
 class InfoVAEMixin:
-    """Mixin class for InfoVAE.
+    r"""Mixin class for InfoVAE.
 
     https://arxiv.org/abs/1706.02262
 
     Parameters
     ----------
     lamb : float, default 1
+        Scaling coefficient :math:`\lambda`.
     alpha : float, default 0
+        Information preference :math:`\alpha`.
 
     """
 
@@ -194,28 +200,21 @@ class InfoVAEMixin:
             The squared maximum mean discrepancy.
 
         """
-        z_p = torch.randn_like(z)
+        qz = z
+        pz = torch.randn_like(z)
         mmd = (
-            self.kernel(z_p, z_p).mean()
-            - 2 * self.kernel(z, z_p).mean()
-            + self.kernel(z, z).mean()
+            self.kernel(pz, pz).mean()
+            - 2 * self.kernel(qz, pz).mean()
+            + self.kernel(qz, qz).mean()
         )
+        self.loss_mmd_ = mmd
         return mmd
 
-    def loss(
-        self,
-        lamb: Optional[float] = None,
-        alpha: Optional[float] = None,
-        **kwargs,
-    ) -> Tensor:
-        r"""Compute the InfoVAE objective function.
+    def loss(self, **kwargs) -> Tensor:
+        """Compute the InfoVAE objective function.
 
         Parameters
         ----------
-        lamb : float, optional
-            Scaling coefficient :math:`\lambda`.
-        alpha : float, optional
-            Information preference :math:`\alpha`.
         **kwargs
             Extra arguments to loss terms.
 
@@ -224,17 +223,212 @@ class InfoVAEMixin:
         torch.Tensor
 
         """
-        lamb = self.lamb if lamb is None else lamb
-        alpha = self.alpha if alpha is None else alpha
         return (
             self.rec_loss(**kwargs)
-            + (1 - alpha) * self.kl_loss(**kwargs)
-            + (alpha + lamb - 1) * self.mmd_loss(**kwargs)
+            + (1 - self.alpha) * self.kl_loss(**kwargs)
+            + (self.alpha + self.lamb - 1) * self.mmd_loss(**kwargs)
+        )
+
+
+class DIPVAEMixin:
+    """Mixin class for DIP-VAE.
+
+    https://arxiv.org/abs/1711.00848
+
+    Parameters
+    ----------
+    lambda_od : float, default 10
+        Hyperparameter :math:`\lambda_{od}` for the loss on the off-diagonal entries.
+    lambda_d : float, default 10
+        Hyperparameter :math:`\lambda_d` for the loss on the diagonal entries.
+    dip : int, 1 or 2
+        DIP type.
+
+    """
+
+    def __init__(
+        self,
+        lambda_od: float = 10,
+        lambda_d: float = 10,
+        dip: int = 1,
+        **kwargs,
+    ) -> None:
+        self.lambda_od = lambda_od
+        self.lambda_d = lambda_d
+        self.dip = dip
+        super().__init__(**kwargs)
+
+    def dip_regularizer(
+        self,
+        mu: Optional[Tensor] = None,
+        logvar: Optional[Tensor] = None,
+        **kwargs,
+    ) -> Tuple[Tensor, Tensor]:
+        """Compute the DIP regularization terms, when :math:`q(z|x)` is Gaussian.
+
+        Parameters
+        ----------
+        mu : torch.Tensor, optional
+            Encoder output :math:`\mu`.
+        logvar : torch.Tensor, optional
+            Encoder output :math:`\log\sigma^2`.
+
+        Returns
+        -------
+        off_diag_loss : torch.Tensor
+            The off-diagonal loss.
+        diag_loss : torch.Tensor
+            The diagonal loss.
+
+        """
+        mu = self.mu_ if mu is None else mu
+        logvar = self.logvar_ if logvar is None else logvar
+        mu_mean = mu - mu.mean(dim=0)
+        cov_mu = mu_mean.t() @ mu_mean / mu.size(0)
+        if self.dip == 1:
+            cov = cov_mu
+        elif self.dip == 2:
+            var = torch.diag_embed(torch.exp(logvar))
+            cov = var.mean(dim=0) + cov_mu
+        else:
+            raise ValueError
+        cov_diag = torch.diag(cov)
+        cov_off_diag = cov - torch.diag(cov_diag)
+        off_diag_loss = cov_off_diag.pow(2).sum()
+        diag_loss = (cov_diag - 1).pow(2).sum()
+        self.loss_off_diag_, self.loss_diag_ = off_diag_loss, diag_loss
+        return off_diag_loss, diag_loss
+
+    def loss(self, **kwargs) -> Tensor:
+        """Compute the DIP-VAE objective function.
+
+        Parameters
+        ----------
+        **kwargs
+            Extra arguments to loss terms.
+
+        Returns
+        -------
+        torch.Tensor
+
+        """
+        off_diag_loss, diag_loss = self.dip_regularizer(**kwargs)
+        return (
+            self.rec_loss(**kwargs)
+            + self.kl_loss(**kwargs)
+            + self.lambda_od * off_diag_loss
+            + self.lambda_d * diag_loss
+        )
+
+
+class BetaTCVAEMixin:
+    r"""Mixin class for :math:`\beta`-TCVAE.
+
+    https://arxiv.org/abs/1802.04942
+
+    Parameters
+    ----------
+    alpha : float, default 1
+        Weight :math:`\alpha` of the index-code mutual information.
+    beta : float, default 1
+        Weight :math:`\beta` of the total correlation.
+    gamma : float, default 1
+        Weight :math:`\gamma` of the dimension-wise KL.
+
+    """
+
+    def __init__(
+        self,
+        alpha: float = 1,
+        beta: float = 1,
+        gamma: float = 1,
+        **kwargs,
+    ) -> None:
+        self.alpha = alpha
+        self.beta = beta
+        self.gamma = gamma
+        super().__init__(**kwargs)
+
+    @staticmethod
+    def gaussian_log_density(x: Tensor, mu: Tensor, logvar: Tensor) -> Tensor:
+        """Compute the log density of a Gaussian."""
+        log2pi = math.log(2 * math.pi)
+        inv_var = torch.exp(-logvar)
+        return -0.5 * (log2pi + logvar + (x - mu).pow(2) * inv_var)
+
+    def decompose_kl(
+        self,
+        n: int,
+        z: Tensor,
+        mu: Optional[Tensor] = None,
+        logvar: Optional[Tensor] = None,
+        **kwargs,
+    ) -> Tuple[Tensor, Tensor, Tensor]:
+        """Compute the decomposed KL terms.
+
+        Parameters
+        ----------
+        n : int
+            Dataset size :math:`N`.
+        z : torch.Tensor
+            The latent variables.
+        mu : torch.Tensor, optional
+            Encoder output :math:`\mu`.
+        logvar : torch.Tensor, optional
+            Encoder output :math:`\log\sigma^2`.
+
+        Returns
+        -------
+        mi_loss : torch.Tensor
+            The index-code mutual information.
+        tc_loss : torch.Tensor
+            The total correlation.
+        kl_loss : torch.Tensor
+            The dimension-wise KL.
+
+        """
+        mu = self.mu_ if mu is None else mu
+        logvar = self.logvar_ if logvar is None else logvar
+        m, dim = z.shape
+        logqz_x = self.gaussian_log_density(z, mu, logvar).sum(dim=1)
+        zeros = torch.zeros_like(z)
+        logpz = self.gaussian_log_density(z, zeros, zeros).sum(dim=1)
+        # minibatch weighted sampling
+        logqzxi_xj = self.gaussian_log_density(
+            z.view(m, 1, dim), mu.view(1, m, dim), logvar.view(1, m, dim)
+        )
+        logqz = torch.logsumexp(logqzxi_xj.sum(dim=2), dim=1) - math.log(n * m)
+        logprodqz = (torch.logsumexp(logqzxi_xj, dim=1) - math.log(n * m)).sum(dim=1)
+        mi_loss = (logqz_x - logqz).mean()
+        tc_loss = (logqz - logprodqz).mean()
+        kl_loss = (logprodqz - logpz).mean()
+        self.loss_mi_, self.loss_tc_, self.loss_kl_ = mi_loss, tc_loss, kl_loss
+        return mi_loss, tc_loss, kl_loss
+
+    def loss(self, **kwargs) -> Tensor:
+        r"""Compute the :math:`\beta`-TCVAE objective function.
+
+        Parameters
+        ----------
+        **kwargs
+            Extra arguments to loss terms.
+
+        Returns
+        -------
+        torch.Tensor
+
+        """
+        mi_loss, tc_loss, kl_loss = self.decompose_kl(**kwargs)
+        return (
+            self.rec_loss(**kwargs)
+            + self.alpha * mi_loss
+            + self.beta * tc_loss
+            + self.gamma * kl_loss
         )
 
 
 class VQVAEMixin:
-    """Mixin class for VQ-VAE.
+    r"""Mixin class for VQ-VAE.
 
     https://arxiv.org/abs/1711.00937
 
@@ -245,6 +439,7 @@ class VQVAEMixin:
     num_embeddings : int
         The size of the discrete latent space.
     commitment_cost : float
+        Scalar :math:`\beta` which controls the weighting of the commitment loss.
 
     """
 
@@ -304,7 +499,7 @@ class VQVAEMixin:
         encoding_indices = distances.argmin(dim=1)
         encoding_indices = encoding_indices.reshape(inputs.shape[:-1])
         quantized = self.embeddings.forward(encoding_indices)
-        self.codebook_loss_, self.commitment_loss_ = self.vq_loss(inputs, quantized)
+        self.loss_codebook_, self.loss_commitment_ = self.vq_loss(inputs, quantized)
         # straight-through estimator
         quantized = inputs + (quantized - inputs).detach()
         return quantized, encoding_indices
@@ -329,13 +524,11 @@ class VQVAEMixin:
         commitment_loss = (z_e - z_q.detach()).pow(2).sum(dim=-1).mean()
         return codebook_loss, commitment_loss
 
-    def loss(self, beta: Optional[float] = None, **kwargs) -> Tensor:
+    def loss(self, **kwargs) -> Tensor:
         """Compute the VQ-VAE objective function.
 
         Parameters
         ----------
-        beta : float, optional
-            Scalar which controls the weighting of the commitment loss.
         **kwargs
             Extra arguments to loss terms.
 
@@ -344,7 +537,7 @@ class VQVAEMixin:
         torch.Tensor
 
         """
-        beta = self.commitment_cost if beta is None else beta
+        beta = self.commitment_cost
         return (
-            self.rec_loss(**kwargs) + self.codebook_loss_ + beta * self.commitment_loss_
+            self.rec_loss(**kwargs) + self.loss_codebook_ + beta * self.loss_commitment_
         )

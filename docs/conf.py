@@ -31,6 +31,8 @@ intersphinx_mapping = {
     "torch": ("https://pytorch.org/docs/stable", None),
 }
 
+myst_enable_extensions = ["dollarmath"]
+
 numpydoc_show_class_members = False
 numpydoc_xref_param_type = True
 numpydoc_xref_ignore = {"optional", "default"}

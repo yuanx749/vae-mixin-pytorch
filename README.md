@@ -20,6 +20,8 @@ Implemented VAEs:
 - VAE
 - beta-VAE
 - InfoVAE
+- DIP-VAE
+- $\beta$-TCVAE
 - VQ-VAE
 
 ```{note}
