@@ -2,6 +2,15 @@ name: Sphinx build
 
 on:
   workflow_dispatch:
+    inputs:
+      doc_format:
+        description: 'Extension to parse docstrings'
+        required: true
+        default: 'numpydoc'
+        type: choice
+        options:
+          - numpydoc
+          - napoleon
   push:
     branches:
       - main
@@ -22,6 +31,8 @@ jobs:
       - name: Build HTML
         run: make html
         working-directory: docs
+        env:
+          doc_format: ${{ inputs.doc_format }}
       - name: Upload artifacts
         uses: actions/upload-pages-artifact@v1
         with:
